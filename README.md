@@ -1,7 +1,133 @@
 # CarND-Controls-MPC
-Self-Driving Car Engineer Nanodegree Program
+###Self-Driving Car Engineer Nanodegree Program
+#### Zhenglei 2018 April
 
----
+
+
+
+## Intro
+Model Predictive Control reframes the task of following atrajectory as an ***optimization problem***. The solution to the optimization problem is the optimal trajectory.
+
+Model Predictive Control involves simulating different actuator inputs, predicting the resulting trajectory and selecting that trajectory with a minimum cost.
+
+Imagine that we know our current state and the reference trajectory we want to follow. We optimize our actuator inputs at each step in time in order to minimize the cost of our predicted trajectory. 
+
+Once we found the lowest cost trajectory, we implement the very first set of actuation commands. Then, we throw away the rest of the trajectory we calculated. Instead of using the old trajectory we predicted, we take our new state and use that to calculate a new optimal trajectory.
+
+In that sense, we are constantly calculating inputs over a future horzon. That's why this approach is sometimes called Receding Horizon Control.
+
+## Global Kinematic Model
+$$$
+x_{t+1} = x_t + v_t * cos(\psi_t) * dtxt+1​=xt​+vt​∗cos(ψt​)∗dt 
+$$$
+$$$
+y_{t+1} = y_t + v_t * sin(\psi_t) * dtyt+1​=yt​+vt​∗sin(ψt​)∗dt
+$$$
+$$$
+\psi_{t+1} = \psi_t + \frac {v_t} { L_f} * \delta * dtψt+1​=ψt​+Lf​vt​​∗δ∗dt
+$$$
+$$$
+v_{t+1} = v_t + a_t * dtvt+1​=vt​+at​∗dt
+$$$
+
+## Path planning
+Autonomous vehicle system architecture starts with the perception system, which estimates the state of the surrounding environment including landmarks and vehicles and pedestrians. The localization block compares a model to a map to figure out where the vehicle is. The path planning block charts a trajectory using environmental model, the map and vehicle location. Finally, the control loop applies the actuators to follow this trajectory. Typically, the path planning block passes the reference trajectory to the control block as a plynominal. Third degree polynomials are common so they can fit most roads.
+
+$$$
+a_3*x^3 + a_2*x^2 + a_1*x + a_0
+$$$
+
+<img src="./image/path_planning.png" style="width:90%" >
+
+```
+auto coeffs = polyfit(waypoints_x_eig, waypoints_y_eig, 3);
+double cte = polyeval(coeffs, 0);  // px = 0, py = 0
+double epsi = -atan(coeffs[1]);  // p
+```
+
+## Cost function
+A good start to the cost function is to think of the error that you would like to minimize. For example, measuring the offset from the center of the lane, where the center of the lane can be called the reference, or desired, state.
+
+We previously captured two errors in our state vector: cte and ephi.
+
+If the goal is to move the vehicle from A to B then coming to a halt in the middle of the reference trajectory is a problem. A simple solution is a set of reference velocity , to cross functional penalize the vehicle for not maintaining that reference velocity.
+
+## Model predictive control
+<img src="./image/mpc.png" style="width:90%" >
+
+Model predictive control uses an optimizer to find the control inputs and minimize the cost function. We actually only execute the very first set of the control inputs. This bring the vehicle to a new state and then you repeat the process.
+First, we set up everything required for the model predictive control loop. This consists of defining the duration of the trajectory T, by choosing N and dt. Next, we define the vehicle model and constraints such as actual limitations.
+
+<img src="./image/mpc_setup.png" style="width:90%" >
+
+With the setup complete, we begin to state feedback loop. First, we pass the current state to the model predictive controller. Next, the optimization solver is called. The solver uses the initial state, the model constraints and cost function to return a vector of control inputs that minimize the cost function. The solver we'll use is called ***Ipopt***.
+
+<img src="./image/MPC_solver.png" style="width:100%" >
+
+## Ipopt
+https://projects.coin-or.org/Ipopt
+Ipopt (Interior Point OPTimizer,pronounced eye-pea-Opt) is a software package for large-scale nonlinear optimization. It is designed to find(local) solutions of mathematical optimization problems of the form
+
+```
+min f(x)
+x in R^n
+
+s.t.           g_L <= g(x) <= g_U
+               x_L <=  X   <= x_U
+```
+where `f(x): R^n --> R` is the objective function, and `g(x):R^n --> R^m` are the constraint functions. The vectors `g_L` and `g_U` denote the lower and upper bounds on the constraints, and the vectors `x_L` and `x_U` are the bounds on the variables `x`. The functions `f(x)` and `g(x)` can be nonlinear and nonconvex, but should be twice continuously differentiable. Note that equality constraints can be formulated in the above formulation by setting the corresponding components `g_L` and `g_U` to the same value.
+
+## Analyze the road
+
+In this project, we can read out the road from simulator.
+<img src="./image/waypoints.png" style="width:90%" >
+
+
+
+## My tune history
+1) Add steer/throttle change limit at main.cpp
+```
+double new_steer_value = vars[0];
+double new_throttle_value = vars[1];
+
+std::cout << "new_throttle_value before limit: " << new_throttle_value << std::endl;
+
+double max_steer_change = 0.1;
+if (new_steer_value > steer_value + max_steer_change){
+new_steer_value = steer_value + max_steer_change;
+}
+if (new_steer_value < steer_value - max_steer_change){
+new_steer_value = steer_value - max_steer_change;
+}
+double max_throttle_change = 0.2;
+if (new_throttle_value > throttle_value + max_throttle_change){
+new_throttle_value = throttle_value + max_throttle_change;
+}
+if (new_throttle_value < throttle_value - max_throttle_change){
+new_throttle_value = throttle_value - max_throttle_change;
+}
+
+std::cout << "new_throttle_value after limit:  " << new_throttle_value << std::endl;
+```
+
+2) Analyze actual throttle and steer value, after adding limits, the steer and throttle were looks like smooth.
+<img src="./image/log_analyze1.png" style="width:90%" >
+
+
+3) Use land mark as reference, analyze car velocity
+<img src="./image/speed_vs_pstx1.png" style="width:90%" >
+
+4) Add more cost to speed setpoint
+
+5) The car is too far to the center line, so add weights of CTE(cross track error)
+
+6) No help is add CTE weight, so decrease CTE weight to 2000
+
+
+#The original Udacity Readme
+
+# CarND-Controls-MPC
+Self-Driving Car Engineer Nanodegree Program
 
 ## Dependencies
 

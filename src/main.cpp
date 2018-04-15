@@ -8,6 +8,7 @@
 #include "Eigen-3.3/Eigen/QR"
 #include "MPC.h"
 #include "json.hpp"
+#include <fstream>
 
 // for convenience
 using json = nlohmann::json;
@@ -65,11 +66,16 @@ Eigen::VectorXd polyfit(Eigen::VectorXd xvals, Eigen::VectorXd yvals,
   return result;
 }
 
+std::ofstream logfile;
+int running_step;
+
 int main() {
   uWS::Hub h;
 
   // MPC is initialized here!
   MPC mpc;
+
+  logfile.open("log_mpc.txt");
 
   h.onMessage([&mpc](uWS::WebSocket<uWS::SERVER> ws, char *data, size_t length,
                      uWS::OpCode opCode) {
@@ -77,10 +83,13 @@ int main() {
     // The 4 signifies a websocket message
     // The 2 signifies a websocket event
     string sdata = string(data).substr(0, length);
-    cout << sdata << endl;
+    //cout << sdata << endl;
     if (sdata.size() > 2 && sdata[0] == '4' && sdata[1] == '2') {
       string s = hasData(sdata);
       if (s != "") {
+        std::cout <<"========== running step " << running_step <<"============"<< std::endl;
+        running_step++;
+
         auto j = json::parse(s);
         string event = j[0].get<string>();
         if (event == "telemetry") {
@@ -91,6 +100,22 @@ int main() {
           double py = j[1]["y"];
           double psi = j[1]["psi"];
           double v = j[1]["speed"];
+          double steer_value = j[1]["steering_angle"];
+          double throttle_value = j[1]["throttle"];
+
+          //-- LOGGING ---------
+          std::cout <<"logging" << std::endl;
+          logfile << running_step << "\t" << ptsx[0] << "\t"<< ptsy[0] << "\t" << px << "\t" << py << "\t" 
+            << psi << "\t" << v << "\t" << steer_value << "\t" << throttle_value << std::endl;
+
+          std::cout << "px:" << px << "  py:" << py << "  psi:" << psi << "  v:" << v 
+                    << "  steering:" << steer_value << "  throttle:" << throttle_value << endl; 
+
+          for(int i=0; i<ptsx.size(); ++i)
+            {
+              std::cout << "ptsx:" << ptsx[i] << "  ptsy:" << ptsy[i] << endl ;
+            }
+
 
           /*
           * TODO: Calculate steering angle and throttle using MPC.
@@ -98,14 +123,62 @@ int main() {
           * Both are in between [-1, 1].
           *
           */
-          double steer_value;
-          double throttle_value;
+
+          vector<double> waypoints_x;
+          vector<double> waypoints_y;
+
+          // transform waypoints to be from car's perspective
+          // this means we can consider px = 0, py = 0, and psi = 0
+          // greatly simplifying future calculations
+          for (int i = 0; i < ptsx.size(); i++) {
+            double dx = ptsx[i] - px;
+            double dy = ptsy[i] - py;
+            waypoints_x.push_back(dx * cos(-psi) - dy * sin(-psi));
+            waypoints_y.push_back(dx * sin(-psi) + dy * cos(-psi));
+          }
+
+          double* ptrx = &waypoints_x[0];
+          double* ptry = &waypoints_y[0];
+          Eigen::Map<Eigen::VectorXd> waypoints_x_eig(ptrx, 6);
+          Eigen::Map<Eigen::VectorXd> waypoints_y_eig(ptry, 6);
+
+          auto coeffs = polyfit(waypoints_x_eig, waypoints_y_eig, 3);
+          double cte = polyeval(coeffs, 0);  // px = 0, py = 0
+          double epsi = -atan(coeffs[1]);  // p
+
+          std::cout << "coeffs:" << coeffs << endl;
+
+          Eigen::VectorXd state(6);
+          state << 0, 0, 0, v, cte, epsi;
+          auto vars = mpc.Solve(state, coeffs);
+          double new_steer_value = vars[0];
+          double new_throttle_value = vars[1];
+
+          std::cout << "new_throttle_value before limit: " << new_throttle_value << std::endl;
+
+          double max_steer_change = 0.1;
+          if (new_steer_value > steer_value + max_steer_change){
+            new_steer_value = steer_value + max_steer_change;
+          }
+          if (new_steer_value < steer_value - max_steer_change){
+            new_steer_value = steer_value - max_steer_change;
+          }
+          double max_throttle_change = 0.2;
+          if (new_throttle_value > throttle_value + max_throttle_change){
+            new_throttle_value = throttle_value + max_throttle_change;
+          }
+          if (new_throttle_value < throttle_value - max_throttle_change){
+            new_throttle_value = throttle_value - max_throttle_change;
+          }
+          
+          std::cout << "new_throttle_value after limit:  " << new_throttle_value << std::endl;
+
 
           json msgJson;
           // NOTE: Remember to divide by deg2rad(25) before you send the steering value back.
           // Otherwise the values will be in between [-deg2rad(25), deg2rad(25] instead of [-1, 1].
-          msgJson["steering_angle"] = steer_value;
-          msgJson["throttle"] = throttle_value;
+          msgJson["steering_angle"] = new_steer_value/(deg2rad(25));
+          msgJson["throttle"] = new_throttle_value;
 
           //Display the MPC predicted trajectory 
           vector<double> mpc_x_vals;
@@ -113,6 +186,15 @@ int main() {
 
           //.. add (x,y) points to list here, points are in reference to the vehicle's coordinate system
           // the points in the simulator are connected by a Green line
+
+          for (int i = 2; i < vars.size(); i ++) {
+            if (i%2 == 0) {
+              mpc_x_vals.push_back(vars[i]);
+            }
+            else {
+              mpc_y_vals.push_back(vars[i]);
+            }
+          }
 
           msgJson["mpc_x"] = mpc_x_vals;
           msgJson["mpc_y"] = mpc_y_vals;
@@ -124,12 +206,18 @@ int main() {
           //.. add (x,y) points to list here, points are in reference to the vehicle's coordinate system
           // the points in the simulator are connected by a Yellow line
 
+          for (double i = 0; i < 100; i += 3){
+            next_x_vals.push_back(i);
+            next_y_vals.push_back(polyeval(coeffs, i));
+          }
+
           msgJson["next_x"] = next_x_vals;
           msgJson["next_y"] = next_y_vals;
 
 
           auto msg = "42[\"steer\"," + msgJson.dump() + "]";
-          std::cout << msg << std::endl;
+          //std::cout << msg << std::endl;
+          
           // Latency
           // The purpose is to mimic real driving conditions where
           // the car does actuate the commands instantly.
