@@ -1,11 +1,20 @@
 # CarND-Controls-MPC
-###Self-Driving Car Engineer Nanodegree Program
+### Self-Driving Car Engineer Nanodegree Program
 #### Zhenglei 2018 April
 
+https://github.com/lionzheng10/Carnd-MPC-control
 
 
 
 ## Intro
+This project is my solution for the Udacity CarND MPC project. The goal of the project is to automaticaly drive the vehicle around the track in a simulator. 
+The state of the vehicle was send to Cpp program from the simulator, and using MPC-control, I calculate the control signal(steering angle and throttle), and send the control signal to the simulator.
+
+Below is video of the vehicle automatically driving.
+
+<img src="./image/video.gif" style="width:60%" >
+
+## Model predictive control
 Model Predictive Control reframes the task of following atrajectory as an ***optimization problem***. The solution to the optimization problem is the optimal trajectory.
 
 Model Predictive Control involves simulating different actuator inputs, predicting the resulting trajectory and selecting that trajectory with a minimum cost.
@@ -20,12 +29,15 @@ In that sense, we are constantly calculating inputs over a future horzon. That's
 $$$
 x_{t+1} = x_t + v_t * cos(\psi_t) * dtxt+1​=xt​+vt​∗cos(ψt​)∗dt 
 $$$
+
 $$$
 y_{t+1} = y_t + v_t * sin(\psi_t) * dtyt+1​=yt​+vt​∗sin(ψt​)∗dt
 $$$
+
 $$$
 \psi_{t+1} = \psi_t + \frac {v_t} { L_f} * \delta * dtψt+1​=ψt​+Lf​vt​​∗δ∗dt
 $$$
+
 $$$
 v_{t+1} = v_t + a_t * dtvt+1​=vt​+at​∗dt
 $$$
