@@ -26,21 +26,21 @@ Once we found the lowest cost trajectory, we implement the very first set of act
 In that sense, we are constantly calculating inputs over a future horzon. That's why this approach is sometimes called Receding Horizon Control.
 
 ## Global Kinematic Model
-$$$
-x_{t+1} = x_t + v_t * cos(\psi_t) * dtxt+1​=xt​+vt​∗cos(ψt​)∗dt 
-$$$
 
-$$$
-y_{t+1} = y_t + v_t * sin(\psi_t) * dtyt+1​=yt​+vt​∗sin(ψt​)∗dt
-$$$
+#### The model include 6 state variables.
+- x // the x position of the vehicle
+- y // the y position of the vehicle
+- psi // the direction of the vehicle
+- v // velocity of the vehicle
+- cte // cross track error
+- epsi // error between psi and road direction
 
-$$$
-\psi_{t+1} = \psi_t + \frac {v_t} { L_f} * \delta * dtψt+1​=ψt​+Lf​vt​​∗δ∗dt
-$$$
+#### The model also include 2 control actuators
+- delta // steering angle(in rad)
+- a // throttle
 
-$$$
-v_{t+1} = v_t + a_t * dtvt+1​=vt​+at​∗dt
-$$$
+<img src="./image/mpc_setup.png" style="width:90%" >
+
 
 ## Path planning
 Autonomous vehicle system architecture starts with the perception system, which estimates the state of the surrounding environment including landmarks and vehicles and pedestrians. The localization block compares a model to a map to figure out where the vehicle is. The path planning block charts a trajectory using environmental model, the map and vehicle location. Finally, the control loop applies the actuators to follow this trajectory. Typically, the path planning block passes the reference trajectory to the control block as a plynominal. Third degree polynomials are common so they can fit most roads.
@@ -50,6 +50,8 @@ a_3*x^3 + a_2*x^2 + a_1*x + a_0
 $$$
 
 <img src="./image/path_planning.png" style="width:90%" >
+
+In my project I use polyfit function to create a polynominal of the road.
 
 ```
 auto coeffs = polyfit(waypoints_x_eig, waypoints_y_eig, 3);
@@ -68,7 +70,16 @@ If the goal is to move the vehicle from A to B then coming to a halt in the midd
 <img src="./image/mpc.png" style="width:90%" >
 
 Model predictive control uses an optimizer to find the control inputs and minimize the cost function. We actually only execute the very first set of the control inputs. This bring the vehicle to a new state and then you repeat the process.
-First, we set up everything required for the model predictive control loop. This consists of defining the duration of the trajectory T, by choosing N and dt. Next, we define the vehicle model and constraints such as actual limitations.
+First, we set up everything required for the model predictive control loop. This consists of defining the duration of the trajectory T, by choosing N and dt. 
+
+In my project, I choose N=10 and dt=0.1, because the time diffrence between 2 simulator cycle is close to 0.1S.
+
+```
+// TODO: Set the timestep length and duration
+size_t N = 10;
+double dt = 0.1;
+```
+Next, we define the vehicle model and constraints such as actual limitations.
 
 <img src="./image/mpc_setup.png" style="width:90%" >
 
@@ -76,6 +87,16 @@ With the setup complete, we begin to state feedback loop. First, we pass the cur
 
 <img src="./image/MPC_solver.png" style="width:100%" >
 
+## Latency
+In a real car, an actuation command won't execute instantly - there will be a delay as the command propagates through the system. A realistic delay might be on the order of 100 milliseconds.
+
+This is a problem called "latency", and it's a difficult challenge for some controllers - like a PID controller - to overcome. But a Model Predictive Controller can adapt quite well because we can model this latency in the system.
+```
+if (t > 1) {   // use previous actuations (to account for latency)
+  a = vars[a_start + t - 2];
+  delta = vars[delta_start + t - 2];
+}
+```
 ## Ipopt
 https://projects.coin-or.org/Ipopt
 Ipopt (Interior Point OPTimizer,pronounced eye-pea-Opt) is a software package for large-scale nonlinear optimization. It is designed to find(local) solutions of mathematical optimization problems of the form
