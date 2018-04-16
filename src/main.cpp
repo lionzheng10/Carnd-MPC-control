@@ -104,7 +104,7 @@ int main() {
           double throttle_value = j[1]["throttle"];
 
           //-- LOGGING ---------
-          std::cout <<"logging" << std::endl;
+          //std::cout <<"logging" << std::endl;
           logfile << running_step << "\t" << ptsx[0] << "\t"<< ptsy[0] << "\t" << px << "\t" << py << "\t" 
             << psi << "\t" << v << "\t" << steer_value << "\t" << throttle_value << std::endl;
 
@@ -150,26 +150,28 @@ int main() {
 
           Eigen::VectorXd state(6);
           state << 0, 0, 0, v, cte, epsi;
-          auto vars = mpc.Solve(state, coeffs);
-          double new_steer_value = vars[0];
-          double new_throttle_value = vars[1];
+          Solution vars = mpc.Solve(state, coeffs);
+          double new_steer_value = vars.Delta.at(latency_ind);
+          double new_throttle_value = vars.A.at(latency_ind);
+          mpc.delta_prev = new_steer_value;
+          mpc.a_prev = new_throttle_value;
 
-          std::cout << "new_throttle_value before limit: " << new_throttle_value << std::endl;
+          //std::cout << "new_throttle_value before limit: " << new_throttle_value << std::endl;
 
-          double max_steer_change = 0.1;
-          if (new_steer_value > steer_value + max_steer_change){
-            new_steer_value = steer_value + max_steer_change;
-          }
-          if (new_steer_value < steer_value - max_steer_change){
-            new_steer_value = steer_value - max_steer_change;
-          }
-          double max_throttle_change = 0.2;
-          if (new_throttle_value > throttle_value + max_throttle_change){
-            new_throttle_value = throttle_value + max_throttle_change;
-          }
-          if (new_throttle_value < throttle_value - max_throttle_change){
-            new_throttle_value = throttle_value - max_throttle_change;
-          }
+          //double max_steer_change = 0.1;
+          //if (new_steer_value > steer_value + max_steer_change){
+          //  new_steer_value = steer_value + max_steer_change;
+          //}
+          //if (new_steer_value < steer_value - max_steer_change){
+          //  new_steer_value = steer_value - max_steer_change;
+          //}
+          //double max_throttle_change = 0.2;
+          //if (new_throttle_value > throttle_value + max_throttle_change){
+          //  new_throttle_value = throttle_value + max_throttle_change;
+          //}
+          //if (new_throttle_value < throttle_value - max_throttle_change){
+          //  new_throttle_value = throttle_value - max_throttle_change;
+          //}
           
           std::cout << "new_throttle_value after limit:  " << new_throttle_value << std::endl;
 
@@ -177,27 +179,14 @@ int main() {
           json msgJson;
           // NOTE: Remember to divide by deg2rad(25) before you send the steering value back.
           // Otherwise the values will be in between [-deg2rad(25), deg2rad(25] instead of [-1, 1].
-          msgJson["steering_angle"] = new_steer_value/(deg2rad(25));
+          msgJson["steering_angle"] = - new_steer_value/(deg2rad(25));
           msgJson["throttle"] = new_throttle_value;
-
-          //Display the MPC predicted trajectory 
-          vector<double> mpc_x_vals;
-          vector<double> mpc_y_vals;
 
           //.. add (x,y) points to list here, points are in reference to the vehicle's coordinate system
           // the points in the simulator are connected by a Green line
 
-          for (int i = 2; i < vars.size(); i ++) {
-            if (i%2 == 0) {
-              mpc_x_vals.push_back(vars[i]);
-            }
-            else {
-              mpc_y_vals.push_back(vars[i]);
-            }
-          }
-
-          msgJson["mpc_x"] = mpc_x_vals;
-          msgJson["mpc_y"] = mpc_y_vals;
+          msgJson["mpc_x"] = vars.X;
+          msgJson["mpc_y"] = vars.Y;
 
           //Display the waypoints/reference line
           vector<double> next_x_vals;
@@ -216,7 +205,6 @@ int main() {
 
 
           auto msg = "42[\"steer\"," + msgJson.dump() + "]";
-          //std::cout << msg << std::endl;
           
           // Latency
           // The purpose is to mimic real driving conditions where

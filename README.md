@@ -75,9 +75,10 @@ First, we set up everything required for the model predictive control loop. This
 In my project, I choose N=10 and dt=0.1, because the time diffrence between 2 simulator cycle is close to 0.1S.
 
 ```
-// TODO: Set the timestep length and duration
-size_t N = 10;
-double dt = 0.1;
+const size_t N = 12;
+const double dt = 0.05;
+const int latency_ind = 2; //latency  in units of dt (100ms)
+
 ```
 Next, we define the vehicle model and constraints such as actual limitations.
 
@@ -87,16 +88,14 @@ With the setup complete, we begin to state feedback loop. First, we pass the cur
 
 <img src="./image/MPC_solver.png" style="width:100%" >
 
+
 ## Latency
 In a real car, an actuation command won't execute instantly - there will be a delay as the command propagates through the system. A realistic delay might be on the order of 100 milliseconds.
 
 This is a problem called "latency", and it's a difficult challenge for some controllers - like a PID controller - to overcome. But a Model Predictive Controller can adapt quite well because we can model this latency in the system.
-```
-if (t > 1) {   // use previous actuations (to account for latency)
-  a = vars[a_start + t - 2];
-  delta = vars[delta_start + t - 2];
-}
-```
+
+I use the second output of the actuator. Because after latency, the second variable is on the time.
+
 ## Ipopt
 https://projects.coin-or.org/Ipopt
 Ipopt (Interior Point OPTimizer,pronounced eye-pea-Opt) is a software package for large-scale nonlinear optimization. It is designed to find(local) solutions of mathematical optimization problems of the form
@@ -118,43 +117,13 @@ In this project, we can read out the road from simulator.
 
 
 ## My tune history
-1) Add steer/throttle change limit at main.cpp
-```
-double new_steer_value = vars[0];
-double new_throttle_value = vars[1];
-
-std::cout << "new_throttle_value before limit: " << new_throttle_value << std::endl;
-
-double max_steer_change = 0.1;
-if (new_steer_value > steer_value + max_steer_change){
-new_steer_value = steer_value + max_steer_change;
-}
-if (new_steer_value < steer_value - max_steer_change){
-new_steer_value = steer_value - max_steer_change;
-}
-double max_throttle_change = 0.2;
-if (new_throttle_value > throttle_value + max_throttle_change){
-new_throttle_value = throttle_value + max_throttle_change;
-}
-if (new_throttle_value < throttle_value - max_throttle_change){
-new_throttle_value = throttle_value - max_throttle_change;
-}
-
-std::cout << "new_throttle_value after limit:  " << new_throttle_value << std::endl;
-```
+1) Add steer/throttle change limit at main.cpp,
+   Finally, this is no use. The cost function is include the limit.
 
 2) Analyze actual throttle and steer value, after adding limits, the steer and throttle were looks like smooth.
 <img src="./image/log_analyze1.png" style="width:90%" >
 
-
-3) Use land mark as reference, analyze car velocity
-<img src="./image/speed_vs_pstx1.png" style="width:90%" >
-
-4) Add more cost to speed setpoint
-
-5) The car is too far to the center line, so add weights of CTE(cross track error)
-
-6) No help is add CTE weight, so decrease CTE weight to 2000
+4) modify the motion model
 
 
 #The original Udacity Readme
