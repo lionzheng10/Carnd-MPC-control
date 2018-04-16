@@ -72,7 +72,7 @@ If the goal is to move the vehicle from A to B then coming to a halt in the midd
 Model predictive control uses an optimizer to find the control inputs and minimize the cost function. We actually only execute the very first set of the control inputs. This bring the vehicle to a new state and then you repeat the process.
 First, we set up everything required for the model predictive control loop. This consists of defining the duration of the trajectory T, by choosing N and dt. 
 
-In my project, I choose N=10 and dt=0.1, because the time diffrence between 2 simulator cycle is close to 0.1S.
+In my project, I choose N=12 and dt=0.05 * 2, because the time diffrence between 2 simulator cycle is close to 0.1S.
 
 ```
 const size_t N = 12;
@@ -126,7 +126,7 @@ In this project, we can read out the road from simulator.
 4) modify the motion model
 
 
-#The original Udacity Readme
+# The original Udacity Readme
 
 # CarND-Controls-MPC
 Self-Driving Car Engineer Nanodegree Program
